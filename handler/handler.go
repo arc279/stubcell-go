@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"fmt"
@@ -6,21 +6,13 @@ import (
 	"os"
 	"path"
 
-	flags "github.com/jessevdk/go-flags"
-
 	"github.com/flosch/pongo2"
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/engine"
 	"github.com/labstack/echo/engine/standard"
 	"github.com/labstack/echo/middleware"
-
-	"github.com/BurntSushi/toml"
 )
-
-type Options struct {
-	ConfigFile string `short:"c" long:"config" description:"config file location"`
-}
 
 type Route struct {
 	Path     string `toml:"path"`
@@ -90,6 +82,7 @@ func (v Route) CreateHandler(cfg *Config) func(c echo.Context) error {
 		}
 
 		w := c.Response().(*standard.Response).ResponseWriter
+		w.WriteHeader(v.Response.Status)
 		_, err = w.Write([]byte(out))
 		if err != nil {
 			return err
@@ -99,7 +92,18 @@ func (v Route) CreateHandler(cfg *Config) func(c echo.Context) error {
 	}
 }
 
-func (cfg Config) Run(debug bool) {
+func (cfg Config) NewServer() engine.Server {
+	ec := engine.Config{
+		Address: fmt.Sprintf(":%d", cfg.Port),
+	}
+	if cfg.Tls.Enable {
+		ec.TLSCertFile = cfg.Tls.Crt
+		ec.TLSKeyFile = cfg.Tls.Key
+	}
+	return standard.WithConfig(ec)
+}
+
+func (cfg Config) NewEcho(debug bool) *echo.Echo {
 	e := echo.New()
 	e.SetDebug(debug)
 	e.Use(middleware.Logger())
@@ -118,44 +122,5 @@ func (cfg Config) Run(debug bool) {
 		r.Add(v.Method, v.Path, v.CreateHandler(&cfg), e)
 	}
 
-	// create server
-	server := func() *standard.Server {
-		ec := engine.Config{
-			Address: fmt.Sprintf(":%d", cfg.Port),
-		}
-		if cfg.Tls.Enable {
-			ec.TLSCertFile = cfg.Tls.Crt
-			ec.TLSKeyFile = cfg.Tls.Key
-		}
-		return standard.WithConfig(ec)
-	}()
-
-	e.Run(server)
-}
-
-func main() {
-	var opts Options
-	_, err := flags.Parse(&opts)
-	if err != nil {
-		os.Exit(1)
-	}
-
-	ConfigFile := fmt.Sprintf(".%s.toml", path.Base(os.Args[0]))
-	if opts.ConfigFile != "" {
-		ConfigFile = opts.ConfigFile
-	}
-	var BaseDir = path.Dir(ConfigFile)
-
-	var cfg = func(baseDir, configFile string) Config {
-		var cfg Config
-		_, err := toml.DecodeFile(configFile, &cfg)
-		if err != nil {
-			panic(err)
-		}
-		cfg.BaseDir = baseDir
-		return cfg
-	}(BaseDir, ConfigFile)
-	fmt.Printf("%+v\n", cfg)
-
-	cfg.Run(true)
+	return e
 }
