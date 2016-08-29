@@ -1,0 +1,48 @@
+port = 1323
+
+[tls]
+enable = true
+crt = "server.crt"
+key = "server.key"
+
+[request.cors]
+allow_origins = [ "*" ]
+allow_methods = [ "GET", "PUT", "POST", "DELETE" ]
+
+[[request.routes]]
+method = "GET"
+path = "/hello/:name"
+  [request.routes.response]
+  status = 200
+  text = """
+{
+    "this is": "get",
+    "some_param": "{{ some_param|first }}",
+    "name": "{{ name }}"
+}
+"""
+    [request.routes.response.headers]
+    Content-Type = "application/json; charset=utf-8"
+    Host = "example.com"
+
+[[request.routes]]
+method = "POST"
+path = "/hello"
+  [request.routes.response]
+  status = 201
+  file = "post.hello.tpl"
+    [request.routes.response.headers]
+    Content-Type = "application/json; charset=utf-8"
+    Host = "example.com"
+
+[[request.routes]]
+method = "GET"
+path = "/"
+  [request.routes.response]
+  status = 200
+  text = """
+<h1>It works!!</h1>
+"""
+    [request.routes.response.headers]
+    Content-Type = "text/html; charset=utf-8"
+    Host = "example.com"
