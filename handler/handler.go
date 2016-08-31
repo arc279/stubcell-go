@@ -42,9 +42,52 @@ type Config struct {
 	} `toml:"request"`
 }
 
+func (self Config) FilePath(s string) string {
+	if path.IsAbs(s) {
+		return s
+	} else {
+		return path.Join(self.BaseDir, s)
+	}
+}
+
+func (self Config) NewServer() engine.Server {
+	ec := engine.Config{
+		Address: fmt.Sprintf(":%d", self.Port),
+	}
+	if self.Tls.Enable {
+		ec.TLSCertFile = self.FilePath(self.Tls.Crt)
+		ec.TLSKeyFile = self.FilePath(self.Tls.Key)
+	}
+	return standard.WithConfig(ec)
+}
+
+func (self Config) NewEcho(debug bool) *echo.Echo {
+	e := echo.New()
+	e.SetDebug(debug)
+	e.Use(middleware.Logger())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: self.Request.Cors.AllowOrigins,
+		AllowMethods: self.Request.Cors.AllowMethods,
+	}))
+
+	// add routing
+	r := e.Router()
+	if debug {
+		r.Add("GET", "/debug", func(c echo.Context) error {
+			return c.String(http.StatusOK, "Hello, World!")
+		}, e)
+	}
+
+	for _, v := range self.Request.Routes {
+		r.Add(v.Method, v.Path, v.CreateHandler(&self), e)
+	}
+
+	return e
+}
+
 func (v Route) CreateHandler(cfg *Config) func(c echo.Context) error {
 	tpl, err := func(v Route) (*pongo2.Template, error) {
-		fname := path.Join(cfg.BaseDir, v.Response.File)
+		fname := cfg.FilePath(v.Response.File)
 		fstat, err := os.Stat(fname)
 		if err == nil && !fstat.IsDir() {
 			return pongo2.FromFile(fname)
@@ -90,37 +133,4 @@ func (v Route) CreateHandler(cfg *Config) func(c echo.Context) error {
 
 		return nil
 	}
-}
-
-func (cfg Config) NewServer() engine.Server {
-	ec := engine.Config{
-		Address: fmt.Sprintf(":%d", cfg.Port),
-	}
-	if cfg.Tls.Enable {
-		ec.TLSCertFile = cfg.Tls.Crt
-		ec.TLSKeyFile = cfg.Tls.Key
-	}
-	return standard.WithConfig(ec)
-}
-
-func (cfg Config) NewEcho(debug bool) *echo.Echo {
-	e := echo.New()
-	e.SetDebug(debug)
-	e.Use(middleware.Logger())
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: cfg.Request.Cors.AllowOrigins,
-		AllowMethods: cfg.Request.Cors.AllowMethods,
-	}))
-
-	// add routing
-	r := e.Router()
-	r.Add("GET", "/debug", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
-	}, e)
-
-	for _, v := range cfg.Request.Routes {
-		r.Add(v.Method, v.Path, v.CreateHandler(&cfg), e)
-	}
-
-	return e
 }

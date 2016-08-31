@@ -14,6 +14,7 @@ import (
 
 type Options struct {
 	ConfigFile string `short:"c" long:"config" description:"config file location"`
+	Debug      bool   `long:"debug" description:"set debug flag"`
 }
 
 func main() {
@@ -27,20 +28,18 @@ func main() {
 	if opts.ConfigFile != "" {
 		ConfigFile = opts.ConfigFile
 	}
-	var BaseDir = path.Dir(ConfigFile)
 
-	var cfg = func(baseDir, configFile string) handler.Config {
+	var cfg = func(configFile string) handler.Config {
 		var cfg handler.Config
 		_, err := toml.DecodeFile(configFile, &cfg)
 		if err != nil {
 			panic(err)
 		}
-		cfg.BaseDir = baseDir
+		cfg.BaseDir = path.Dir(configFile)
 		return cfg
-	}(BaseDir, ConfigFile)
+	}(ConfigFile)
 	fmt.Printf("%+v\n", cfg)
 
-	// run
-	e, s := cfg.NewEcho(true), cfg.NewServer()
+	e, s := cfg.NewEcho(opts.Debug), cfg.NewServer()
 	e.Run(s)
 }
