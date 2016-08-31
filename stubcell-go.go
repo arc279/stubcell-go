@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"./handler"
+	"github.com/arc279/stubcell-go/handler"
 
 	flags "github.com/jessevdk/go-flags"
 
